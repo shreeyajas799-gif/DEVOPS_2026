@@ -1,0 +1,71 @@
+
+pipeline {
+    agent any
+
+    stages {
+        stage('Build') {
+            steps {
+                sh '''
+                    python3 -m venv venv
+                    ./venv/bin/pip install -r requirements.txt
+                '''
+            }
+        }
+
+        stage('Code Quality') {
+            steps {
+                sh '''
+                    ./venv/bin/pip install flake8
+                    ./venv/bin/flake8 app.py test_app.py --max-line-length=100
+                '''
+            }
+        }
+
+        stage('Test') {
+            steps {
+                sh './venv/bin/python -m unittest discover -s . -v'
+            }
+        }
+
+        stage('Deploy') {
+            steps {
+                sh '''
+                    mkdir -p "$WORKSPACE/python-app-deploy"
+                    cp app.py "$WORKSPACE/python-app-deploy/"
+                    cp requirements.txt "$WORKSPACE/python-app-deploy/"
+                '''
+            }
+        }
+
+        stage('Run Application') {
+            steps {
+                sh '''
+                    cd "$WORKSPACE/python-app-deploy"
+                    nohup "$WORKSPACE/venv/bin/python" app.py \
+                        > app.log 2>&1 &
+                    echo $! > app.pid
+                '''
+            }
+        }
+
+        stage('Test Application') {
+            steps {
+                sh '''
+                    "$WORKSPACE/venv/bin/python" test_app.py
+                '''
+            }
+        }
+    }
+
+    post {
+        success {
+            echo 'Pipeline completed successfully!'
+        }
+        failure {
+            echo 'Pipeline failed. Check the console output.'
+        }
+        always {
+            echo 'Pipeline execution finished.'
+        }
+    }
+}
